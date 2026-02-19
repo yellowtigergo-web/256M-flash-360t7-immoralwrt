@@ -91,13 +91,18 @@ jobs:
     - name: Apply flash 256m patch script
       run: |
         [ -e diy-360t7-flash256.sh ] && chmod +x diy-360t7-flash256.sh && ./diy-360t7-flash256.sh
-
+        
+    - name: Fix libustream SSL backend conflict
+      run: |
+        cd openwrt
+        ./scripts/config -m PACKAGE_libustream-openssl20201210
+        ./scripts/config -d PACKAGE_libustream-mbedtls20201210
+        make defconfig
+    
     - name: Download package
       id: package
       run: |
         cd openwrt
-        make defconfig
-        # 用 nproc 更贴合 runner
         make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
