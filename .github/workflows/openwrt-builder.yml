@@ -1,25 +1,16 @@
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-bulder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
-
-name: OpenWrt Builder
+name: ImmoralWrt Builder
 
 on:
   repository_dispatch:
   workflow_dispatch:
 
-# 关键：允许 GITHUB_TOKEN 创建 Release（修复 403）
-permissions:
-  contents: write
-
 env:
+  # ImmortalWrt 24.xx（当前稳定线是 openwrt-24.10）
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: openwrt-24.10
 
   FEEDS_CONF: feeds.conf.default
+  
   CONFIG_FILE: .config
 
   DIY_P1_SH: diy-part1.sh
@@ -50,12 +41,14 @@ jobs:
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
+        # 更稳：避免 $GROUPS 在 runner 上出现怪值
         sudo chown $USER:$USER /workdir
 
     - name: Clone source code
       working-directory: /workdir
       run: |
         df -hT $PWD
+        # 更稳+更快：浅克隆
         git clone --depth 1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
@@ -82,32 +75,16 @@ jobs:
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
-        make defconfig
-
-    - name: Apply flash 256m patch script
+        
+    - name: Patch 360T7 to 256MB flash
       run: |
         [ -e diy-360t7-flash256.sh ] && chmod +x diy-360t7-flash256.sh && ./diy-360t7-flash256.sh
-
-    - name: Fix libustream SSL backend conflict
-      run: |
-        cd openwrt
-        # 强制只保留 mbedtls，禁用 openssl，避免 libustream-ssl.so 冲突
-        sed -i 's/^CONFIG_PACKAGE_libustream-openssl20201210=y/# CONFIG_PACKAGE_libustream-openssl20201210 is not set/' .config || true
-        # 也处理一下可能出现的 =m 情况（模块）
-        sed -i 's/^CONFIG_PACKAGE_libustream-openssl20201210=m/# CONFIG_PACKAGE_libustream-openssl20201210 is not set/' .config || true
-    
-        # 确保 mbedtls 版至少是 y 或 m（不强求写死 y，让依赖决定）
-        # 如果你想写死也可以：echo "CONFIG_PACKAGE_libustream-mbedtls20201210=y" >> .config
-        make defconfig
-    
-        echo "=== libustream selection ==="
-        grep -E 'libustream-(openssl|mbedtls)20201210' .config || true
-        echo "============================"
-
+        
     - name: Download package
       id: package
       run: |
         cd openwrt
+        make defconfig
         make download -j$(nproc)
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
@@ -117,7 +94,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
-        make -j$(nproc) V=s || make -j1 V=s
+        make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
@@ -156,6 +133,7 @@ jobs:
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
+        # 原版这里会引用未定义的 UPLOAD_GOFILE，而且你也没有 gofile step，所以直接去掉
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
