@@ -67,8 +67,6 @@ diy-part1.sh               ### feeds 自定义
 diy-part2.sh               ### 自定义补丁
 diy-360t7-flash256.sh      ### 256MB Flash 分区脚本
 ```
-
-### Thinks P3TERX Actions-OpenWrt
 ### License
 本项目基于 ImmortalWrt / OpenWrt，遵循 GPL 协议。
 [MIT](https://github.com/P3TERX/Actions-OpenWrt/blob/main/LICENSE) © [**P3TERX**](https://p3terx.com)
